@@ -1,4 +1,4 @@
-# Contributing to DEXignation / DEXignation 기여 가이드
+# Contributing to MolePin / MolePin 기여 가이드
 
 Thank you for considering a contribution. This document explains how to
 report issues, propose changes, and get your pull request merged.
@@ -43,13 +43,13 @@ state, 결제 흐름, 권한에 영향을 주는 컨트랙트 변경은 PR 전�
 
 - [ ] Tests cover the change (positive + negative cases).
 - [ ] No new compiler warnings.
-- [ ] Public functions have NatSpec comments in **both English and Korean**.
+- [ ] Public functions have NatSpec comments in **English** (Korean as a short `(KO: ...)` aside on core descriptions).
 - [ ] No hard-coded addresses, private keys, RPC URLs, or API keys.
 - [ ] If touching ENS-derived code: header attribution still accurate.
 - [ ] `THIRD-PARTY-LICENSES.md` updated if new dependencies were added.
 - [ ] No breaking interface changes without a deprecation path.
 
-테스트 커버리지, 컴파일 경고 없음, 영문/한글 NatSpec, 시크릿 하드코딩 없음,
+테스트 커버리지, 컴파일 경고 없음, 영문 NatSpec(+핵심에 한글 보조), 시크릿 하드코딩 없음,
 ENS 파생 코드의 헤더 정확성, 신규 의존성 추가 시 라이선스 문서 갱신, 호환성
 파괴 없음.
 
@@ -73,22 +73,27 @@ state 변경 함수는 이벤트 발생.
 
 ### Comments / 주석
 
-We maintain **bilingual NatSpec** (English + Korean) on every public-facing
-function and contract:
+Code comments and NatSpec are **English-primary**, with Korean as a short
+secondary aside `(KO: ...)` on core descriptions only:
 
-공개 함수와 컨트랙트에는 **이중언어 NatSpec**(영어 + 한글)을 유지합니다:
+코드 주석과 NatSpec은 **영문이 기본**이며, 한글은 핵심 설명에 한해 짧은 보조
+`(KO: ...)`로 답니다:
 
 ```solidity
-/// @notice Register a name paid in native currency.
-///         네이티브 통화로 결제하여 이름을 등록.
-/// @param label The label to register / 등록할 라벨
-function register(string calldata label, ...) external payable { ... }
+/// @notice Bridge MOL to another chain, charging a $1 native fee.
+///         (KO: $1 native 수수료로 MOL을 다른 체인으로 이동.)
+/// @param destChainSelector CCIP selector of the destination chain
+function bridge(uint64 destChainSelector, ...) external payable { ... }
 ```
 
-Internal helpers can be commented in English only when the function name
-is self-explanatory, but bilingual comments are still preferred.
+Rationale: MolePin is a global project. English is the working language of the
+code; Korean is a courtesy aside for Korean-speaking developers. (Project docs
+such as README/ARCHITECTURE keep full English + Korean; Medium posts are English
+only.)
 
-내부 헬퍼는 함수명이 자명한 경우 영문만으로도 가능하지만, 이중언어를 권장.
+이유: MolePin은 글로벌 프로젝트입니다. 코드의 작업 언어는 영어이며, 한글은
+한국어 개발자를 위한 보조입니다. (README/ARCHITECTURE 등 문서는 영문+한글 둘 다,
+Medium 글은 영어만.)
 
 ---
 
