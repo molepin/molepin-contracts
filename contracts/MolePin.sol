@@ -4,23 +4,31 @@ pragma solidity ^0.8.22;
 /* ============================================================================
  *  MolePin (MOL) — CANONICAL TOKEN (BSC only)  · v2 audit-candidate
  * ----------------------------------------------------------------------------
- *  ⚠ 미감사. "메인넷 후보(감사 입력)" — 외부 감사 + 테스트넷 재검증 전
- *    메인넷 배포 금지.
+ *  WARNING: Unaudited. "Mainnet candidate (audit input)" — do NOT deploy to
+ *  mainnet before an external audit + testnet re-verification.
+ *  (KO: 미감사. 외부 감사 + 테스트넷 재검증 전 메인넷 배포 금지.)
  *
- *  [v2 변경]
- *   · 블록리스트를 sender(from) 한정으로 변경 (이전: from && to).
- *     이유(#5 결함 수정): to 까지 막으면 Adapter unlock(adapter→유저)이나
- *     인바운드 경로가 revert → 크로스체인 메시지 stuck + 보존 불변식 위반.
- *     이제 blocked 주소는 "보낼 수 없음"(자금 동결)이나 "받을 수는 있음"
- *     → 인바운드/unlock 절대 안 막힘. 받은 뒤 전송은 막힘(동결 목적 달성).
- *   · ★ 거버넌스는 Adapter 주소를 절대 block 하지 말 것: from=adapter 인
- *     unlock 이 막히면 브릿지 정지. (sender-only 라 일반 stuck 위험은 제거,
- *     이 한 가지만 운영 규칙 — 감사 시 온체인 가드 추가 검토)
+ *  [v2 changes]
+ *   - Blocklist is now sender-only (from), previously (from && to).
+ *     Reason (#5 fix): blocking `to` would revert adapter unlock (adapter->user)
+ *     and inbound paths -> stuck cross-chain messages + conservation violation.
+ *     Now a blocked address "cannot send" (funds frozen) but "can still receive"
+ *     -> inbound/unlock is never blocked. Sending after receipt is blocked
+ *     (freeze goal still achieved).
+ *     (KO: 블록리스트를 sender(from) 한정으로 변경. blocked는 송금 동결,
+ *      수신은 가능 -> unlock/인바운드 절대 안 막힘.)
+ *   - ★ Governance must NEVER block the Adapter address: blocking from=adapter
+ *     would stop unlock -> bridge halts. (sender-only removes general stuck risk;
+ *     this is the one operational rule — consider an on-chain guard at audit.)
+ *     (KO: 거버넌스는 Adapter 주소를 절대 block 금지. unlock 막히면 브릿지 정지.)
  *
- *  불변식 I1: 생성자 1회 발행 후 mint 경로 영구 부재 → totalSupply ≡ 6.94T.
- *  ★ Adapter feeExempt 는 "권장 최적화"로 강등 (Adapter v2 가 pre/post 잔고
- *    회계로 정확성 보장 → 잊어도 공급 드리프트 없음. feeExempt 시 유저가
- *    브릿지에서 전송세를 안 물어 UX 만 깔끔).
+ *  Invariant I1: minted once in the constructor, no mint path ever exists
+ *  afterward -> totalSupply ≡ 6.94T. (KO: 1회 발행 후 mint 경로 영구 부재.)
+ *  ★ Adapter feeExempt is demoted to a "recommended optimization" (Adapter v2
+ *    guarantees correctness via pre/post balance accounting -> no supply drift
+ *    even if forgotten; feeExempt only makes the UX clean by sparing the user
+ *    the transfer fee on bridging).
+ *    (KO: feeExempt는 정확성 요건이 아니라 UX 최적화로 강등. 없어도 보존 안전.)
  * ==========================================================================*/
 contract MolePin {
     string public constant name = "MolePin";
@@ -79,8 +87,9 @@ contract MolePin {
 
     function _transfer(address f, address t, uint256 v) internal {
         require(t != address(0), "MOL: zero to");
-        // ★ v2: sender 만 차단 (bridge-safe). blocked = 보낼 수 없음(동결),
-        //   받을 수는 있음 → Adapter unlock/인바운드 절대 안 막힘.
+        // v2: block sender only (bridge-safe). blocked = cannot send (frozen),
+        // can still receive -> adapter unlock / inbound never blocked.
+        // (KO: sender만 차단. blocked는 송금 동결, 수신 가능.)
         require(!blocked[f], "MOL: sender blocked");
         require(balanceOf[f] >= v, "MOL: balance");
         uint256 fee = 0;
