@@ -1,0 +1,59 @@
+# ============================================================
+#  MolePin .gitignore — WHITELIST 방식 (화이트리스트)
+#  기본: 전부 무시. 공개할 것만 명시적으로 허용(!).
+#  이유: 블랙리스트는 하나만 빠뜨려도 키/배포 유출. 화이트리스트가 안전.
+#  공개 대상: contracts/ + test/ + 최소 설정 + 공개 문서만.
+# ============================================================
+
+# 1) 전부 무시
+*
+
+# 2) 디렉토리는 들어가야 하위 허용이 먹으므로 디렉토리 자체는 통과
+!*/
+
+# 3) 공개할 것만 명시 허용
+# --- 컨트랙트 (mocks 포함) ---
+!contracts/**/*.sol
+
+# --- 테스트 ---
+!test/**/*.js
+!test/**/*.ts
+
+# --- 공개 문서 ---
+!README.md
+!docs/MIGRATION_CCT_TO_LZ.md
+!LICENSE
+
+# --- 프로젝트 메타 (값 없는 것만) ---
+!.gitignore
+!.env.example
+!package.json
+!package-lock.json
+!tsconfig.json
+
+# 4) 위에서 허용됐더라도 절대 올리면 안 되는 것 재차단 (이중 안전망)
+.env
+.env.*
+!.env.example
+**/*.key
+**/secret*
+**/*secret*
+sig.js
+sig*.js
+sig*.ts
+
+# 5) 빌드 산출물
+node_modules/
+artifacts/
+cache/
+typechain-types/
+coverage/
+coverage.json
+
+scripts/
+hardhat.config.ts
+deploy/
+
+# 주의: hardhat.config.ts / scripts/ / deploy/ 는 화이트리스트에 없으므로
+#       자동으로 전부 무시됨. (키·배포 로직 포함 가능성 → 비공개)
+#       config가 꼭 필요하면 키를 뺀 "공개용 config"를 별도로 만들어 명시 허용할 것.
