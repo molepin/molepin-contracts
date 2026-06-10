@@ -57,3 +57,13 @@ deploy/
 # 주의: hardhat.config.ts / scripts/ / deploy/ 는 화이트리스트에 없으므로
 #       자동으로 전부 무시됨. (키·배포 로직 포함 가능성 → 비공개)
 #       config가 꼭 필요하면 키를 뺀 "공개용 config"를 별도로 만들어 명시 허용할 것.
+
+.env
+.env.*
+*.key
+deployments/*.local.json
+docs/*.docx
+!docs/adr/
+!docs/adr/**/
+!docs/adr/*.md
+!docs/adr/assets/*.png
