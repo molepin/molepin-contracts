@@ -139,6 +139,13 @@ const config: HardhatUserConfig = {
       apiKey: BSCSCAN_API_KEY,
     },
   },
+  ignition: {
+    strategyConfig: {
+      create2: {
+        salt: "0xc5147ddf842719cbbf729ea3fe293d2495872a508273e34e78c2a83c617d187b",
+      },
+    },
+  },
 };
 
 export default config;

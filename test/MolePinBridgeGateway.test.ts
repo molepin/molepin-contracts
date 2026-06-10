@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
 //
-// Tests for MolePinBridgeGateway: fee math ($1 worth of native), fee cap ($5),
+// Tests for MolePinBridgeGateway (V3): fee math ($1 worth of native), fee cap ($5),
 // oracle safety (zero price reverts), destination allowlist, treasury update,
 // and owner-only access control.
 //
-// 게이트웨이 테스트: 수수료 수학($1어치 native), 상한($5), 오라클 안전(0 가격
+// V3 change: gateway constructor is (owner, treasury); mol/router/feed are injected
+// via configure(mol, router, feed) after deploy. bridge() is (selector, recipient, amount).
+//
+// 게이트웨이 테스트(V3): 수수료 수학($1어치 native), 상한($5), 오라클 안전(0 가격
 // revert), 도착 체인 화이트리스트, treasury 갱신, owner 권한.
 
 import { expect } from "chai";
@@ -31,13 +34,13 @@ describe("MolePinBridgeGateway", () => {
     const feed = await viem.deployContract("MockPriceOracle", [8, BNB_PRICE_8DEC]);
     const router = await viem.deployContract("MockCCIPRouter", [CCIP_FEE]);
     const mol = await viem.deployContract("MolePin", [owner.account.address]);
+    // V3: 2-arg constructor (owner, treasury)
     const gw = await viem.deployContract("MolePinBridgeGateway", [
       owner.account.address,
-      mol.address,
-      router.address,
-      feed.address,
       treasury.account.address,
     ]);
+    // V3: inject mol/router/feed via configure
+    await gw.write.configure([mol.address, router.address, feed.address]);
     return { feed, router, mol, gw };
   }
 
@@ -83,23 +86,19 @@ describe("MolePinBridgeGateway", () => {
 
   it("reverts when oracle price is stale (older than 1h)", async () => {
     const { gw, feed } = await deployAll();
-    // set updatedAt to a far-past fixed timestamp (definitely > 3600s old)
     await feed.write.setUpdatedAt([1000n]);
     await viem.assertions.revert(gw.read.molepinFeeInNative());
   });
 
   it("handles an 18-decimal feed correctly", async () => {
-    // Deploy a fresh gateway whose feed reports 18 decimals.
     const feed18 = await viem.deployContract("MockPriceOracle", [18, 2n * 10n ** 18n]); // $2, 18dec
     const router = await viem.deployContract("MockCCIPRouter", [CCIP_FEE]);
     const mol = await viem.deployContract("MolePin", [owner.account.address]);
     const gw = await viem.deployContract("MolePinBridgeGateway", [
       owner.account.address,
-      mol.address,
-      router.address,
-      feed18.address,
       treasury.account.address,
     ]);
+    await gw.write.configure([mol.address, router.address, feed18.address]);
     // $1 / $2 = 0.5 token (18dec)
     expect(await gw.read.molepinFeeInNative()).to.equal(parseEther("0.5"));
   });
@@ -109,8 +108,9 @@ describe("MolePinBridgeGateway", () => {
     const { gw, mol } = await deployAll();
     const amount = 1000n * 10n ** 18n;
     await mol.write.approve([gw.address, amount]);
+    // V3 bridge: (selector, recipient, amount). 999 not allowed → revert.
     await viem.assertions.revert(
-      gw.write.bridge([999n, "0x", amount, "0x"], { value: parseEther("1") }),
+      gw.write.bridge([999n, owner.account.address, amount], { value: parseEther("1") }),
     );
   });
 
@@ -118,6 +118,20 @@ describe("MolePinBridgeGateway", () => {
     const { gw } = await deployAll();
     await gw.write.setDestChain([SAMPLE_SELECTOR, true]);
     expect(await gw.read.allowedDestChains([SAMPLE_SELECTOR])).to.equal(true);
+  });
+
+  // ── Trusted remote gateway (V3) ────────────────────────────────────────────
+  it("owner can set a trusted remote gateway", async () => {
+    const { gw } = await deployAll();
+    await gw.write.setTrustedRemoteGateway([SAMPLE_SELECTOR, gw.address]);
+    expect((await gw.read.trustedRemoteGateway([SAMPLE_SELECTOR])).toLowerCase()).to.equal(
+      gw.address.toLowerCase(),
+    );
+  });
+
+  it("default destGasLimit is 250000", async () => {
+    const { gw } = await deployAll();
+    expect(await gw.read.destGasLimit()).to.equal(250_000n);
   });
 
   // ── Access control ────────────────────────────────────────────────────────
@@ -137,5 +151,13 @@ describe("MolePinBridgeGateway", () => {
     const { gw } = await deployAll();
     await gw.write.setTreasury([user.account.address]);
     expect((await gw.read.treasury()).toLowerCase()).to.equal(user.account.address.toLowerCase());
+  });
+
+  // ── configure guard (V3) ────────────────────────────────────────────────────
+  it("configure can only be called once", async () => {
+    const { gw, mol, router, feed } = await deployAll();
+    await viem.assertions.revert(
+      gw.write.configure([mol.address, router.address, feed.address]),
+    );
   });
 });

@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: MIT
 //
-// Integration tests for the full bridge() flow: MOL pull + router forwarding,
+// Integration tests for the full bridge() flow (V3): MOL pull + router forwarding,
 // MolePin fee routed to treasury (in native), excess native refunded, event
 // emission, and the insufficient-native revert. Uses MockCCIPRouter so the
 // native flow is exercised without a real CCIP lane.
 //
-// bridge() 전체 흐름 통합 테스트: MOL 회수+라우터 전달, MolePin 수수료의
-// treasury 전달(native), 초과 native 환불, 이벤트, native 부족 revert.
-// MockCCIPRouter로 실제 CCIP lane 없이 native 흐름을 검증한다.
+// V3: gateway constructor is (owner, treasury); configure(mol, router, feed) after deploy.
+// bridge(selector, recipient, amount). Requires a trusted remote gateway for the dest selector.
+//
+// bridge() 전체 흐름 통합 테스트: MOL 회수+라우터 전달, 수수료 treasury 전달(native),
+// 초과 native 환불, 이벤트, native 부족 revert.
 
 import { expect } from "chai";
 import { network } from "hardhat";
@@ -35,14 +37,16 @@ describe("MolePinBridgeGateway — bridge() integration", () => {
     const feed = await viem.deployContract("MockPriceOracle", [8, BNB_PRICE_8DEC]);
     const router = await viem.deployContract("MockCCIPRouter", [CCIP_FEE]);
     const mol = await viem.deployContract("MolePin", [owner.account.address]);
+    // V3: 2-arg constructor + configure
     const gw = await viem.deployContract("MolePinBridgeGateway", [
       owner.account.address,
-      mol.address,
-      router.address,
-      feed.address,
       treasury.account.address,
     ]);
+    await gw.write.configure([mol.address, router.address, feed.address]);
     await gw.write.setDestChain([SELECTOR, true]);
+    // V3: bridge() requires a trusted remote gateway for the dest selector.
+    // Use the gateway's own address (same-address CREATE2 model).
+    await gw.write.setTrustedRemoteGateway([SELECTOR, gw.address]);
     // fund the user with MOL so they can bridge
     const amount = 1_000_000n * 10n ** 18n;
     await mol.write.transfer([user.account.address, amount]);
@@ -62,7 +66,7 @@ describe("MolePinBridgeGateway — bridge() integration", () => {
     });
 
     const before = await pub.getBalance({ address: treasury.account.address });
-    await gwUser.write.bridge([SELECTOR, user.account.address, bridgeAmt, "0x"], { value: total });
+    await gwUser.write.bridge([SELECTOR, user.account.address, bridgeAmt], { value: total });
     const after = await pub.getBalance({ address: treasury.account.address });
 
     expect(after - before).to.equal(molepinFee, "treasury should receive exactly the MolePin fee");
@@ -78,7 +82,7 @@ describe("MolePinBridgeGateway — bridge() integration", () => {
       client: { wallet: user },
     });
     await viem.assertions.emit(
-      gwUser.write.bridge([SELECTOR, user.account.address, bridgeAmt, "0x"], { value: total }),
+      gwUser.write.bridge([SELECTOR, user.account.address, bridgeAmt], { value: total }),
       gw,
       "BridgeInitiated",
     );
@@ -98,14 +102,13 @@ describe("MolePinBridgeGateway — bridge() integration", () => {
     });
 
     const before = await pub.getBalance({ address: user.account.address });
-    const hash = await gwUser.write.bridge([SELECTOR, user.account.address, bridgeAmt, "0x"], {
+    const hash = await gwUser.write.bridge([SELECTOR, user.account.address, bridgeAmt], {
       value: overpay,
     });
     const receipt = await pub.getTransactionReceipt({ hash });
     const gasCost = receipt.gasUsed * receipt.effectiveGasPrice;
     const after = await pub.getBalance({ address: user.account.address });
 
-    // user should have paid only `exact` + gas (the 0.5 overpay refunded)
     const spent = before - after;
     expect(spent).to.equal(exact + gasCost, "only exact fee + gas spent; overpay refunded");
   });
@@ -118,9 +121,8 @@ describe("MolePinBridgeGateway — bridge() integration", () => {
     const gwUser = await viem.getContractAt("MolePinBridgeGateway", gw.address, {
       client: { wallet: user },
     });
-    // send far too little
     await viem.assertions.revert(
-      gwUser.write.bridge([SELECTOR, user.account.address, bridgeAmt, "0x"], { value: 1n }),
+      gwUser.write.bridge([SELECTOR, user.account.address, bridgeAmt], { value: 1n }),
     );
   });
 
@@ -130,7 +132,7 @@ describe("MolePinBridgeGateway — bridge() integration", () => {
       client: { wallet: user },
     });
     await viem.assertions.revert(
-      gwUser.write.bridge([SELECTOR, user.account.address, 0n, "0x"], { value: parseEther("1") }),
+      gwUser.write.bridge([SELECTOR, user.account.address, 0n], { value: parseEther("1") }),
     );
   });
 });
