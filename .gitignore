@@ -64,3 +64,9 @@ secrets/
 **/private-keys.json
 ignition/deployments/*.backup-*
 ignition/deployments/*.backup-*
+
+# ── 비공개: 운영 스크립트 / 배포 산출물 / 파라미터 (전체 차단) ──
+scripts/
+params/
+ignition/deployments/
+ignition/
