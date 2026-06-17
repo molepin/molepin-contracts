@@ -1,115 +1,108 @@
-# MolePin Contracts
+# MolePin (MOL)
 
-> The first meme that doesn't bark — it digs. A BSC-native MemeFi token with Chainlink CCT multichain bridging. The core is a pure, immutable ERC20; all policy (fees, staking, rewards) lives in separate modules.
+**A fixed-supply omnichain MemeFi token, live across 7 EVM chains via Chainlink CCIP / Cross-Chain Token (CCT).**
 
-<details><summary>▶ 한국어로 보기</summary>
+MolePin keeps one invariant above everything: the total supply of MOL across every chain always equals the genesis supply of **6,942,420,888,888 MOL**. Bridging never creates or destroys MOL — it moves it.
 
-짖지 않는 첫 번째 밈 — 땅을 판다. BSC를 홈 체인으로 하는 MemeFi 토큰이며 Chainlink CCT로 멀티체인 이동을 지원합니다. 코어는 순수·불변 ERC20이고, 모든 정책(수수료·스테이킹·보상)은 별도 모듈에 둡니다.
-
-</details>
+> **KO:** MolePin(MOL)은 고정 공급 옴니체인 MemeFi 토큰입니다. 7개 EVM 체인에서 Chainlink CCIP/CCT로 작동하며, 모든 체인의 MOL 총합은 항상 창세기 공급량 **6,942,420,888,888 MOL**과 같습니다. 브리지는 MOL을 새로 만들거나 없애지 않고 이동시킬 뿐입니다.
 
 ---
 
-## Status
+## Design principles
 
-Pre-deployment. Contracts compiled & verified locally (Solidity 0.8.28, viaIR, Cancun).
+- **Supply invariance** — Total MOL across all chains always equals the genesis supply. The BSC home chain locks/releases the original supply; remote chains mint/burn a 1:1 representation. Enforced by Chainlink CCT.
+- **Token-pure / policy-in-gateway** — The MOL token contracts carry no bridge logic, fees, limits, blacklist, or pause. All cross-chain policy lives in a separate gateway contract. This keeps the token frictionless for DEX listing and CCT pools.
+- **Native fee collection** — Bridge fees are collected in the source chain's native gas token (BNB, ETH, POL, AVAX…), not in MOL.
+- **Owner → multisig trajectory** — A single owner key today, with a Safe multisig / timelock as the target.
 
-<details><summary>▶ 한국어로 보기</summary>
+> **KO:** 공급 불변(모든 체인 총합 = 창세기 공급), 토큰 순수성(브리지 로직은 게이트웨이에만), 네이티브 수수료(출발 체인 가스 토큰으로 징수), owner→멀티시그 지향.
 
-배포 전. 컨트랙트 로컬 컴파일·검증 완료 (Solidity 0.8.28, viaIR, Cancun).
+---
 
-</details>
+## Architecture at a glance
 
-## Contracts
-
-| Contract | Role | Chain |
-|---|---|---|
-| `MolePin` | Home token — pure, immutable, 6,942,420,888,888 MOL | BSC |
-| `MolePinRemote` | Remote token — pool-only mint/burn, starts at 0 | Polygon / Base / Arbitrum / Optimism / ... |
-| `MolePinBridgeGateway` | Cross-chain transfer + fee (native gas token, $1, cap $5) | every EVM chain |
-
-CCT pools (`LockReleaseTokenPool` on BSC, `BurnMintTokenPool` on remotes) are Chainlink standard and deployed as-is.
-
-<details><summary>▶ 한국어로 보기</summary>
-
-| 컨트랙트 | 역할 | 체인 |
-|---|---|---|
-| `MolePin` | 홈 토큰 — 순수·불변, 6,942,420,888,888 MOL | BSC |
-| `MolePinRemote` | 리모트 토큰 — 풀 전용 mint/burn, 0에서 시작 | Polygon / Base / Arbitrum / Optimism / ... |
-| `MolePinBridgeGateway` | 멀티체인 이동 + 수수료 (native 가스토큰, $1, 상한 $5) | 모든 EVM 체인 |
-
-CCT 풀(BSC는 `LockReleaseTokenPool`, 리모트는 `BurnMintTokenPool`)은 Chainlink 표준을 그대로 사용합니다.
-
-</details>
-
-## Tokenomics
-
-- **Supply**: 6,942,420,888,888 MOL (fixed, 18 decimals). No mint function — supply can never increase; voluntary burn only.
-- **Home**: BSC (LockRelease). **Remotes**: BurnMint, 1:1 with the BSC-locked amount (CCT-enforced).
-- **Bridge fee**: every cross-chain transfer is charged the source chain's native gas token worth $1 (owner-adjustable, hard-capped $5), paid to treasury. CCIP's own fee is separate. MOL itself is never touched.
-
-<details><summary>▶ 한국어로 보기</summary>
-
-- **발행량**: 6,942,420,888,888 MOL (고정, 18 decimals). mint 함수 없음 — 공급은 절대 증가하지 않으며 자발적 소각만 가능.
-- **홈**: BSC(LockRelease). **리모트**: BurnMint, BSC에 잠긴 양과 1:1 (CCT가 강제).
-- **브릿지 수수료**: 모든 멀티체인 이동에 출발 체인의 native 가스토큰으로 $1어치(owner 조정 가능, 상한 $5)를 징수하여 배포지갑으로 보냅니다. CCIP 자체 수수료는 별도이며, MOL 자체는 건드리지 않습니다.
-
-</details>
-
-## Quick Start
-
-```bash
-npm install
-npx hardhat compile
-npm test
+```
+        ┌──────────────────────── BSC (home) ────────────────────────┐
+        │  MolePin (ERC20, fixed 6.94T)                               │
+        │  LockRelease Pool  ←──lock/release──→  Gateway              │
+        └──────────────────────────────┬─────────────────────────────┘
+                                        │ Chainlink CCIP
+        ┌───────────────────────────────┼───────────────────────────────┐
+        │                               │                               │
+   ┌────▼─────┐   ┌────────┐   ┌────────▼─┐   ┌────────┐   ┌──────────┐   ┌─────────┐
+   │ Ethereum │   │Polygon │   │ Arbitrum │   │Optimism│   │   Base   │   │Avalanche│
+   │ MolePinRemote + BurnMint Pool + Gateway  (mint on arrival / burn on send)      │
+   └──────────┴───┴────────┴───┴──────────┴───┴────────┴───┴──────────┴───┴─────────┘
 ```
 
-Deploy (home first):
-```bash
-npx hardhat ignition deploy ignition/modules/MolePinDeployHome.ts --network bscTestnet
-npx hardhat ignition deploy ignition/modules/MolePinDeployHome.ts --network bsc
-# remote chains
-npx hardhat ignition deploy ignition/modules/MolePinDeployRemote.ts --network polygon
+- **Home (BSC):** the full 6.94T supply exists here. A **LockRelease** pool locks MOL on outbound bridges and releases it on inbound.
+- **Remote (6 chains):** `MolePinRemote` starts at 0 supply. A **BurnMint** pool mints MOL when it arrives and burns it when it leaves. Circulating remote supply tracks the BSC-locked amount 1:1.
+- **Gateway (all 7 chains):** wraps CCT to collect a native fee, enforce trusted routes, and forward minted tokens to the end user. Same address on every chain (CREATE2).
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full transfer lifecycle.
+
+> **KO:** 홈(BSC)은 전량 6.94T 보유 + LockRelease 풀. 리모트 6체인은 0에서 시작 + BurnMint 풀(도착 시 mint, 출발 시 burn). 게이트웨이는 7체인 모두 동일 주소(CREATE2)로 네이티브 수수료·신뢰 경로·forward를 담당.
+
+---
+
+## Deployed contracts (mainnet)
+
+All gateways share one address; all 6 remote tokens share one address (CREATE2 + identical token address ⇒ identical pool/gateway addresses).
+
+| Contract | Address |
+|---|---|
+| **Gateway** (all 7 chains) | `0x6942cb929de1e5747A3Ed72c7bD698f2aEdD3a55` |
+| **MolePin** (home token, BSC) | `0x6942E2bb91b1C0Efaae67f03DBAB611107fBBd80` |
+| **MolePinRemote** (6 remote chains) | `0x6942c0fD0d4655Ba8ee1251E204103AADb6Fee20` |
+| **LockRelease pool** (BSC) | `0x36aa3d0700e7bf8a91b9353ab51423abb628b581` |
+| **BurnMint pool** (6 remote chains) | `0xee89111388f3bead196f36f95ed997269ed0bab6` |
+
+Per-chain selectors and the full matrix are in [`docs/DEPLOYMENTS.md`](docs/DEPLOYMENTS.md).
+
+> **KO:** 게이트웨이는 7체인 동일 주소, 리모트 토큰은 6체인 동일 주소(CREATE2 + 동일 토큰 주소 → 동일 풀/게이트웨이 주소). 체인별 selector는 DEPLOYMENTS.md 참조.
+
+---
+
+## Repository layout
+
+```
+contracts/
+  MolePin.sol              # Home token (BSC) — pure fixed-supply ERC20
+  MolePinRemote.sol        # Remote token — BurnMint (MINTER/BURNER = CCT pool)
+  MolePinBridgeGateway.sol # Native-fee gateway over CCT
+test/                      # Hardhat 3 (mocha/chai + viem) tests
+docs/
+  ARCHITECTURE.md          # Transfer lifecycle, gateway design, supply model
+  TOKENOMICS.md            # Supply, fees, distribution model
+  DEPLOYMENTS.md           # Per-chain addresses & selectors
 ```
 
-## Adding a new EVM chain (no code change)
+> **Note:** deployment scripts, operational tooling, and internal runbooks are intentionally **not** included in this public repository. This repo contains contracts, tests, and documentation only.
+>
+> **KO:** 배포 스크립트·운영 도구·내부 런북은 공개 레포에 의도적으로 포함하지 않습니다. 이 레포는 컨트랙트·테스트·문서만 담습니다.
 
-1. Deploy `MolePinRemote` on the new chain.
-2. Deploy `BurnMintTokenPool` (CCT standard) → `remote.grantPoolRoles(pool)`.
-3. Deploy `MolePinBridgeGateway` (inject that chain's MOL / Router / native-USD feed / treasury).
-4. `setDestChain(selector, true)` on every gateway — register both directions.
-5. Register in the CCT Token Admin Registry + configure lanes / rate limits.
+---
 
-See `DEPLOY_NOTES.md` and `ORACLE_CHAINS.md`.
+## Tech stack
 
-<details><summary>▶ 한국어로 보기</summary>
+- **Solidity** 0.8.28 (EVM Cancun), OpenZeppelin 5.x
+- **Hardhat 3** + Ignition + viem
+- **Chainlink CCIP / CCT** — LockRelease (home) + BurnMint (remote)
+- **CREATE2** for identical cross-chain addresses
 
-## 새 EVM 체인 추가 (코드 수정 없음)
-
-1. 새 체인에 `MolePinRemote` 배포.
-2. `BurnMintTokenPool`(CCT 표준) 배포 → `remote.grantPoolRoles(pool)`.
-3. `MolePinBridgeGateway` 배포 (그 체인의 MOL / Router / native-USD 피드 / treasury 주입).
-4. 모든 게이트웨이에서 `setDestChain(selector, true)` — 양방향 등록.
-5. CCT Token Admin Registry 등록 + lane / rate limit 설정.
-
-`DEPLOY_NOTES.md`와 `ORACLE_CHAINS.md` 참고.
-
-</details>
-
-## Tech Stack
-
-Solidity 0.8.28 · Hardhat 3 · viem · OpenZeppelin 5.x · Chainlink CCT (CCIP) + Data Feeds · BNB Chain (home).
+---
 
 ## Security
 
-Smart-contract changes touching state, fees, or access control require design discussion first. Do **not** open public issues for vulnerabilities — see `SECURITY.md`.
+- The token contracts have **no mint path** beyond genesis (home) or the CCT pool (remote), **no transfer fee/limit**, **no blacklist**, and **no pause** — owner cannot touch supply, balances, or transfers.
+- Remote mint/burn is restricted to `MINTER_ROLE` / `BURNER_ROLE`, held only by the CCT pool.
+- Ownership uses `Ownable2Step`; migration to a Safe multisig / timelock is on the roadmap.
+- Responsible disclosure: please open a security advisory rather than a public issue.
 
-<details><summary>▶ 한국어로 보기</summary>
+> **KO:** 토큰은 창세기(홈)/풀(리모트) 외 발행 경로 없음, 전송세·한도·블랙리스트·pause 없음. 리모트 발행/소각은 CCT 풀(MINTER/BURNER)만 가능. 소유권은 2단계, 멀티시그 이전 예정.
 
-state, 수수료, 권한에 영향을 주는 컨트랙트 변경은 사전 설계 논의가 필요합니다. 보안 취약점은 공개 이슈로 열지 마세요 — `SECURITY.md` 참고.
-
-</details>
+---
 
 ## License
 
-MIT
+MIT. See [`LICENSE`](LICENSE).

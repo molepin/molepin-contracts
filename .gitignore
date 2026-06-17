@@ -64,9 +64,25 @@ secrets/
 **/private-keys.json
 ignition/deployments/*.backup-*
 ignition/deployments/*.backup-*
-
+ignition/modules/HomeTokenOnly.ts
+ignition/modules/RemoteTokenOnly.ts
+ignition/modules/GatewayV3Only.ts
+ignition/modules/DeployHome.ts
+ignition/modules/DeployRemote.ts
+ignition/modules/GatewayOnly.ts
 # ── 비공개: 운영 스크립트 / 배포 산출물 / 파라미터 (전체 차단) ──
 scripts/
+scripts/vanity-*.ts
+scripts/prime-gateway.ts
+scripts/omni-send.ts
+scripts/set-fees.ts
+scripts/check-*.ts
+scripts/sim-bridge.ts
+molepin-bridge-reference.html
+
+deployments/
 params/
+configData*
 ignition/deployments/
 ignition/
+*-all.sh

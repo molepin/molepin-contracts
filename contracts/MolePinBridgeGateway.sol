@@ -187,6 +187,48 @@ contract MolePinBridgeGateway is Ownable2Step, ReentrancyGuard, IAny2EVMMessageR
         return (feeUsd * (10 ** NATIVE_FEED_DECIMALS)) / uint256(price);
     }
 
+    // ── Quote (view) ─────────────────────────────────────────────────────────────
+    /**
+     * @notice Pre-send estimate of the total native value required to bridge `molAmount` MOL to
+     *         `finalRecipient` on `destChainSelector`. The frontend/script should call this first,
+     *         then send `totalNative` (plus a small buffer for price drift) as msg.value to bridge().
+     *         This eliminates "insufficient native" failures from guessing the fee.
+     *         (KO: bridge() 전에 필요한 총 native를 미리 견적. 이 값(+소량 버퍼)을 msg.value로 보내면
+     *          "insufficient native" 실패가 사라짐. 초과분은 bridge()가 자동 환불.)
+     * @dev Builds the EXACT same CCIP message as bridge() (receiver, data, tokenAmounts, feeToken,
+     *      extraArgs) so ROUTER.getFee returns the identical ccipFee that bridge() will compute.
+     *      View-only: no token transfer, no approval, no state change.
+     * @return totalNative ccipFee + molepinFee — send at least this as msg.value.
+     * @return ccipFee     CCIP protocol fee in native (paid to the router).
+     * @return molepinFee  MolePin native fee in native (paid to the treasury).
+     */
+    function quoteBridgeNative(uint64 destChainSelector, address finalRecipient, uint256 molAmount)
+        external view onlyConfigured
+        returns (uint256 totalNative, uint256 ccipFee, uint256 molepinFee)
+    {
+        require(molAmount > 0, "zero amount");
+        require(finalRecipient != address(0), "zero recipient");
+        address destGateway = trustedRemoteGateway[destChainSelector];
+        require(destGateway != address(0), "no remote gateway");
+
+        Client.EVMTokenAmount[] memory tokenAmounts = new Client.EVMTokenAmount[](1);
+        tokenAmounts[0] = Client.EVMTokenAmount({token: address(MOL), amount: molAmount});
+
+        Client.EVM2AnyMessage memory message = Client.EVM2AnyMessage({
+            receiver: abi.encode(destGateway),
+            data: abi.encode(finalRecipient),
+            tokenAmounts: tokenAmounts,
+            feeToken: address(0),
+            extraArgs: Client._argsToBytes(
+                Client.EVMExtraArgsV2({gasLimit: destGasLimit, allowOutOfOrderExecution: true})
+            )
+        });
+
+        ccipFee = ROUTER.getFee(destChainSelector, message);
+        molepinFee = molepinFeeInNative();
+        totalNative = ccipFee + molepinFee;
+    }
+
     // ── Send side ──────────────────────────────────────────────────────────────
     /**
      * @notice Bridge `molAmount` MOL to `finalRecipient` on the destination chain.

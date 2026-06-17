@@ -21,6 +21,10 @@ const AMOY_RPC_URL = process.env.AMOY_RPC_URL ?? "https://rpc-amoy.polygon.techn
 const BASE_RPC_URL = process.env.BASE_RPC_URL ?? "https://mainnet.base.org";
 const ARBITRUM_RPC_URL = process.env.ARBITRUM_RPC_URL ?? "https://arb1.arbitrum.io/rpc";
 const OPTIMISM_RPC_URL = process.env.OPTIMISM_RPC_URL ?? "https://mainnet.optimism.io";
+const ETHEREUM_RPC_URL = process.env.ETHEREUM_RPC_URL ?? "https://eth.llamarpc.com";
+const AVALANCHE_RPC_URL = process.env.AVALANCHE_RPC_URL ?? "https://api.avax.network/ext/bc/C/rpc";
+const BASE_SEPOLIA_RPC_URL = process.env.BASE_SEPOLIA_RPC_URL ?? "https://sepolia.base.org";
+const ARBITRUM_SEPOLIA_RPC_URL = process.env.ARBITRUM_SEPOLIA_RPC_URL ?? "https://sepolia-rollup.arbitrum.io/rpc";
 
 const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY;
 
@@ -30,8 +34,17 @@ const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY;
 const BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY ?? "";
 
 function liveAccounts(): string[] {
-  if (!DEPLOYER_PRIVATE_KEY) return [];
-  return [DEPLOYER_PRIVATE_KEY.startsWith("0x") ? DEPLOYER_PRIVATE_KEY : `0x${DEPLOYER_PRIVATE_KEY}`];
+  const keys: string[] = [];
+  // owner 먼저 (게이트웨이 배포 + 권한 작업, 7체인 가스 보유)
+  const ownerKey = process.env.OWNER_PRIVATE_KEY;
+  if (ownerKey) {
+    keys.push(ownerKey.startsWith("0x") ? ownerKey : `0x${ownerKey}`);
+  }
+  // 배포 지갑 두 번째 (필요 시)
+  if (DEPLOYER_PRIVATE_KEY) {
+    keys.push(DEPLOYER_PRIVATE_KEY.startsWith("0x") ? DEPLOYER_PRIVATE_KEY : `0x${DEPLOYER_PRIVATE_KEY}`);
+  }
+  return keys;
 }
 
 const config: HardhatUserConfig = {
@@ -119,12 +132,42 @@ const config: HardhatUserConfig = {
       accounts: liveAccounts(),
       chainId: 42161,
     },
+    baseSepolia: {
+      type: "http",
+      chainType: "op",
+      url: BASE_SEPOLIA_RPC_URL,
+      accounts: liveAccounts(),
+      chainId: 84532,
+    },
+    arbitrumSepolia: {
+      type: "http",
+      chainType: "l1",
+      url: ARBITRUM_SEPOLIA_RPC_URL,
+      accounts: liveAccounts(),
+      chainId: 421614,
+    },
     optimism: {
       type: "http",
       chainType: "op",
       url: OPTIMISM_RPC_URL,
       accounts: liveAccounts(),
       chainId: 10,
+    },
+    // hardhat.config.ts networks 안에 추가
+    ethereum: {
+      type: "http",
+      chainType: "l1",
+      url: ETHEREUM_RPC_URL,
+      accounts: liveAccounts(),
+      chainId: 1,
+    },
+    avalanche: {
+      type: "http",
+      chainType: "l1",
+      url: AVALANCHE_RPC_URL,
+      accounts: liveAccounts(),
+      chainId: 43114,
+      gasPrice: 30000000000,
     },
   },
 
@@ -142,7 +185,7 @@ const config: HardhatUserConfig = {
   ignition: {
     strategyConfig: {
       create2: {
-        salt: "0xc5147ddf842719cbbf729ea3fe293d2495872a508273e34e78c2a83c617d187b",
+        salt: process.env.DEPLOY_SALT ?? "0x0000000000000000000000000000000000000000000000000000000000000000",
       },
     },
   },

@@ -67,6 +67,17 @@ contract MolePinRemote is ERC20, ERC20Burnable, ERC20Permit, Ownable2Step, Acces
         _grantRole(BURNER_ROLE, pool);
     }
 
+    /// @notice CCT-standard alias for grantPoolRoles. Grants MINTER+BURNER to the pool.
+    /// @dev Signature matches Chainlink's BurnMintERC20.grantMintAndBurnRoles(address) so that
+    ///      the standard ccip tooling (deployTokenPool task, etc.) works against this token as-is.
+    ///      Uses the public grantRole internally, so the OZ AccessControl admin check applies
+    ///      (caller must hold DEFAULT_ADMIN_ROLE) — same security as grantPoolRoles.
+    ///      (KO: ccip 표준 툴이 기대하는 시그니처 별칭. grantRole 내부 호출이라 admin만 가능.)
+    function grantMintAndBurnRoles(address burnAndMinter) external {
+        grantRole(MINTER_ROLE, burnAndMinter);
+        grantRole(BURNER_ROLE, burnAndMinter);
+    }
+
     // ── IBurnMintERC20 (called by the CCT pool) ──────────────────────────────
     function mint(address account, uint256 amount) external override onlyRole(MINTER_ROLE) {
         _mint(account, amount);
