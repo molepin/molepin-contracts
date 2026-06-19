@@ -51,11 +51,12 @@ All gateways share one address; all 6 remote tokens share one address (CREATE2 +
 
 | Contract | Address |
 |---|---|
-| **Gateway** (all 7 chains) | `0x6942cb929de1e5747A3Ed72c7bD698f2aEdD3a55` |
-| **MolePin** (home token, BSC) | `0x6942E2bb91b1C0Efaae67f03DBAB611107fBBd80` |
-| **MolePinRemote** (6 remote chains) | `0x6942c0fD0d4655Ba8ee1251E204103AADb6Fee20` |
-| **LockRelease pool** (BSC) | `0x36aa3d0700e7bf8a91b9353ab51423abb628b581` |
-| **BurnMint pool** (6 remote chains) | `0xee89111388f3bead196f36f95ed997269ed0bab6` |
+| **Gateway** (all 7 chains) | `0x6942898A893cf7065b33218A840bFE8AEbc38f70` |
+| **MolePin** (home token, BSC) | `0x694203c357E76F550fd009F8F2FEdC6d6E53C59E` |
+| **MolePinRemote** (6 remote chains) | `0x6942aD53c8558339bCc0E27dB7D28ee2976f506C` |
+| **LockRelease pool** (BSC) | `0xd00557c8636a7c3482a042ef8af62016a85582f9` |
+| **BurnMint pool** (5 remote chains) | `0xd00557c8636a7c3482a042ef8af62016a85582f9` |
+| **BurnMint pool** (Avalanche) | `0xc7796d3ff595ee8e4869548b833da1c98805b0d1` |
 
 Per-chain selectors and the full matrix are in [`docs/DEPLOYMENTS.md`](docs/DEPLOYMENTS.md).
 
@@ -97,9 +98,10 @@ docs/
 - The token contracts have **no mint path** beyond genesis (home) or the CCT pool (remote), **no transfer fee/limit**, **no blacklist**, and **no pause** — owner cannot touch supply, balances, or transfers.
 - Remote mint/burn is restricted to `MINTER_ROLE` / `BURNER_ROLE`, held only by the CCT pool.
 - Ownership uses `Ownable2Step`; migration to a Safe multisig / timelock is on the roadmap.
+- **Audited by Beosin** (Report No. 202606191626). All contracts are source-verified on every chain's block explorer.
 - Responsible disclosure: please open a security advisory rather than a public issue.
 
-> **KO:** 토큰은 창세기(홈)/풀(리모트) 외 발행 경로 없음, 전송세·한도·블랙리스트·pause 없음. 리모트 발행/소각은 CCT 풀(MINTER/BURNER)만 가능. 소유권은 2단계, 멀티시그 이전 예정.
+> **KO:** 토큰은 창세기(홈)/풀(리모트) 외 발행 경로 없음, 전송세·한도·블랙리스트·pause 없음. 리모트 발행/소각은 CCT 풀(MINTER/BURNER)만 가능. 소유권은 2단계, 멀티시그 이전 예정. **Beosin 감사 완료(보고서 No.202606191626), 전 체인 컨트랙트 소스 검증(verify) 완료.**
 
 ---
 
