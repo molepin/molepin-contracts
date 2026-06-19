@@ -136,6 +136,7 @@ contract MolePinBridgeGateway is Ownable2Step, ReentrancyGuard, IAny2EVMMessageR
     event DestChainUpdated(uint64 indexed selector, bool allowed);
     event TrustedRemoteUpdated(uint64 indexed selector, address indexed gateway);
     event DestGasLimitUpdated(uint256 oldLimit, uint256 newLimit);
+    event ERC20Rescued(address indexed token, address indexed to, uint256 amount);
     event GatewayConfigured(address indexed token, address indexed router, address indexed nativeUsdFeed, uint8 feedDecimals);
     event BridgeInitiated(
         address indexed sender, uint64 indexed destChainSelector, address indexed finalRecipient,
@@ -287,7 +288,7 @@ contract MolePinBridgeGateway is Ownable2Step, ReentrancyGuard, IAny2EVMMessageR
      *         to THIS gateway. Forwards them to the real user encoded in `message.data`.
      * @dev Security: only the configured router may call; source chain + sender gateway must be trusted.
      */
-    function ccipReceive(Client.Any2EVMMessage calldata message) external override nonReentrant {
+    function ccipReceive(Client.Any2EVMMessage calldata message) external override nonReentrant onlyConfigured {
         require(msg.sender == address(ROUTER), "only router");
         address srcGateway = trustedRemoteGateway[message.sourceChainSelector];
         require(srcGateway != address(0), "untrusted source chain");
@@ -329,9 +330,14 @@ contract MolePinBridgeGateway is Ownable2Step, ReentrancyGuard, IAny2EVMMessageR
         emit DestChainUpdated(selector, allowed);
     }
 
-    /// @notice Register the trusted gateway address for a remote chain (usually address(this) since CREATE2).
+    /// @notice Register/update the trusted gateway address for a remote chain (usually address(this)
+    ///         since CREATE2). Passing address(0) REVOKES inbound trust for that chain — ccipReceive
+    ///         then rejects messages from it ("untrusted source chain"). This is the inbound counterpart
+    ///         to setDestChain(selector, false), which only stops OUTBOUND bridging; use both to fully
+    ///         disable a chain in both directions.
+    ///         (KO: address(0) 전달 시 해당 체인 인바운드 신뢰 해지. setDestChain(false)는 아웃바운드만 차단하므로
+    ///          완전 비활성화하려면 둘 다 사용.)
     function setTrustedRemoteGateway(uint64 selector, address gateway) external onlyOwner {
-        require(gateway != address(0), "zero addr");
         trustedRemoteGateway[selector] = gateway;
         emit TrustedRemoteUpdated(selector, gateway);
     }
@@ -346,6 +352,22 @@ contract MolePinBridgeGateway is Ownable2Step, ReentrancyGuard, IAny2EVMMessageR
         require(to != address(0), "zero addr");
         (bool ok, ) = payable(to).call{value: address(this).balance}("");
         require(ok, "sweep failed");
+    }
+
+    /// @notice Recover ERC20 tokens stranded in this gateway. Owner-only.
+    /// @dev The gateway holds MOL only TRANSIENTLY: bridge() pulls it in and immediately approves/sends
+    ///      it to the router; ccipReceive() forwards it out in the same call. Normal-flow balance is 0.
+    ///      Tokens can still get stranded if a CCIP message permanently fails and Chainlink returns the
+    ///      tokens here, or if any ERC20 is sent to this address by mistake — this function extracts them.
+    ///      Safe w.r.t. supply invariant: the BSC LockRelease pool is a SEPARATE contract, so the gateway
+    ///      never custodies the locked home supply; nothing here can touch it. The ERC20 counterpart to
+    ///      sweepNative.
+    ///      (KO: 게이트웨이는 MOL을 일시 보유만 함(정상 잔액 0). CCIP 실패 반송/오송금 토큰 회수용. LockRelease
+    ///       풀은 별도 컨트랙트라 락 물량과 무관 → 공급 불변 안전.)
+    function rescueERC20(address token, address to, uint256 amount) external onlyOwner {
+        require(token != address(0) && to != address(0), "zero addr");
+        IERC20(token).safeTransfer(to, amount);
+        emit ERC20Rescued(token, to, amount);
     }
 
     receive() external payable {}
