@@ -35,15 +35,23 @@ const BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY ?? "";
 
 function liveAccounts(): string[] {
   const keys: string[] = [];
+
+  // 64-hex(32바이트) 개인키만 통과. 주소(40 hex)·빈 값·잘못된 형식은 버림.
+  // 이게 없으면 OWNER_PRIVATE_KEY에 주소가 들어갔을 때 11개 네트워크가 전부 죽음.
+  const norm = (v?: string): string | null => {
+    if (!v) return null;
+    const k = v.startsWith("0x") ? v : `0x${v}`;
+    return /^0x[0-9a-fA-F]{64}$/.test(k) ? k : null;
+  };
+
   // owner 먼저 (게이트웨이 배포 + 권한 작업, 7체인 가스 보유)
-  const ownerKey = process.env.OWNER_PRIVATE_KEY;
-  if (ownerKey) {
-    keys.push(ownerKey.startsWith("0x") ? ownerKey : `0x${ownerKey}`);
-  }
+  const ownerKey = norm(process.env.OWNER_PRIVATE_KEY);
+  if (ownerKey) keys.push(ownerKey);
+
   // 배포 지갑 두 번째 (필요 시)
-  if (DEPLOYER_PRIVATE_KEY) {
-    keys.push(DEPLOYER_PRIVATE_KEY.startsWith("0x") ? DEPLOYER_PRIVATE_KEY : `0x${DEPLOYER_PRIVATE_KEY}`);
-  }
+  const deployerKey = norm(DEPLOYER_PRIVATE_KEY);
+  if (deployerKey) keys.push(deployerKey);
+
   return keys;
 }
 
