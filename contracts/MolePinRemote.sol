@@ -70,12 +70,32 @@ contract MolePinRemote is ERC20, ERC20Burnable, ERC20Permit, Ownable2Step, Acces
     /// @notice CCT-standard alias for grantPoolRoles. Grants MINTER+BURNER to the pool.
     /// @dev Signature matches Chainlink's BurnMintERC20.grantMintAndBurnRoles(address) so that
     ///      the standard ccip tooling (deployTokenPool task, etc.) works against this token as-is.
-    ///      Uses the public grantRole internally, so the OZ AccessControl admin check applies
-    ///      (caller must hold DEFAULT_ADMIN_ROLE) — same security as grantPoolRoles.
-    ///      (KO: ccip 표준 툴이 기대하는 시그니처 별칭. grantRole 내부 호출이라 admin만 가능.)
-    function grantMintAndBurnRoles(address burnAndMinter) external {
-        grantRole(MINTER_ROLE, burnAndMinter);
-        grantRole(BURNER_ROLE, burnAndMinter);
+    ///      The explicit onlyRole(DEFAULT_ADMIN_ROLE) modifier makes the access intent self-evident
+    ///      at the signature level; it is also redundantly enforced by the internal grantRole check.
+    ///      (KO: ccip 표준 툴이 기대하는 시그니처 별칭. 명시적 admin 제한 + grantRole 내부 검사 이중 보호.)
+    function grantMintAndBurnRoles(address burnAndMinter) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _grantRole(MINTER_ROLE, burnAndMinter);
+        _grantRole(BURNER_ROLE, burnAndMinter);
+    }
+
+    /// @notice Atomically migrate DEFAULT_ADMIN_ROLE alongside ownership.
+    /// @dev Ownable2Step calls _transferOwnership() only when the pending owner calls acceptOwnership().
+    ///      Without this override, DEFAULT_ADMIN_ROLE would stay with the original deployer after a
+    ///      2-step transfer, so the new owner could not call grantPoolRoles / grantMintAndBurnRoles —
+    ///      role authority would diverge from ownership. We revoke the role from the outgoing owner and
+    ///      grant it to the incoming owner in the same call. Guarded against no-op/self-transfer.
+    ///      (KO: 소유권 수락 시점에 DEFAULT_ADMIN_ROLE도 함께 신규 owner로 원자적 이관. 권한-소유권 불일치 방지.)
+    function _transferOwnership(address newOwner) internal override {
+        address previousOwner = owner();
+        super._transferOwnership(newOwner);
+        if (newOwner != previousOwner) {
+            if (previousOwner != address(0)) {
+                _revokeRole(DEFAULT_ADMIN_ROLE, previousOwner);
+            }
+            if (newOwner != address(0)) {
+                _grantRole(DEFAULT_ADMIN_ROLE, newOwner);
+            }
+        }
     }
 
     // ── IBurnMintERC20 (called by the CCT pool) ──────────────────────────────
@@ -87,6 +107,13 @@ contract MolePinRemote is ERC20, ERC20Burnable, ERC20Permit, Ownable2Step, Acces
         _burn(msg.sender, amount);
     }
 
+    /// @notice Burn from an arbitrary account. Restricted to BURNER_ROLE (= the CCT pool only).
+    /// @dev NO _spendAllowance here, BY DESIGN — this matches Chainlink's standard BurnMintERC20.
+    ///      In the CCT BurnMint flow the pool burns tokens it already custodies (moved to the pool by
+    ///      the lock/burn step), so requiring an ERC20 allowance would break the pool. Safety rests on
+    ///      BURNER_ROLE being granted EXCLUSIVELY to the CCT pool (never an EOA or third party). For
+    ///      allowance-gated burns, use burnFrom() instead.
+    ///      (KO: CCT 표준과 동일하게 의도적으로 allowance 미검사. BURNER_ROLE은 CCT 풀 전용. 권한 외 부여 금지.)
     function burn(address account, uint256 amount) external override onlyRole(BURNER_ROLE) {
         _burn(account, amount);
     }
