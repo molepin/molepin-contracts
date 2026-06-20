@@ -105,6 +105,17 @@ docs/
 
 ---
 
+## Audit
+Audited by [Beosin](https://beosin.com) — Report No. 202606191626.
+📄 [Full report (PDF)](./audits/Beosin-MolePin-202606191626.pdf)
+
+- Audited commit: `<감사커밋해시>`
+- All deployed contracts are source-verified on each chain's explorer.
+- The audited source, the committed code, and the verified bytecode are the
+  same — anyone can trace report → commit → on-chain code.
+  
+---
+
 ## License
 
 MIT. See [`LICENSE`](LICENSE).
